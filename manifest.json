@@ -1,7 +1,7 @@
 {
   "$schema": "ppt-skill-manifest/v1",
   "skill_name": "ppt-builder",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "file_count": 98,
   "files": {
     ".gitattributes": {
@@ -17,10 +17,10 @@
       "last_modified": "1.0.0"
     },
     "CHANGELOG.md": {
-      "sha256": "743f8625e00f607abbd629f6002a75500c8a221475c44b44ca1488be84fe0f93",
-      "size": 14714,
+      "sha256": "5ffa0232cbdef76794452c1867887e60d3838b309c910be6defe922a354e77ed",
+      "size": 14985,
       "version_added": "1.0.0",
-      "last_modified": "1.0.9"
+      "last_modified": "1.0.10"
     },
     "LICENSE": {
       "sha256": "6f52f1baed8c393758ff6e8bf9c515edd6fd377187ae38a64165a330573b7829",
@@ -35,10 +35,10 @@
       "last_modified": "1.0.0"
     },
     "README.md": {
-      "sha256": "764b3fe5893a82d1f79783f7ea7fb0ae5cc0fd59181e9cbf54481c236e8de672",
-      "size": 3251,
+      "sha256": "0110d248332983b73e70b01919828f9b56243935507ccc1f359024e96c900db0",
+      "size": 3304,
       "version_added": "1.0.0",
-      "last_modified": "1.0.5"
+      "last_modified": "1.0.10"
     },
     "SKILL.md": {
       "sha256": "77ca8a35be5d067944884d0823fbd0602909806538ffc7b78ef7fbbaee165abf",
@@ -47,16 +47,16 @@
       "last_modified": "1.0.8"
     },
     "VERSION": {
-      "sha256": "2df2bd7011e87351e2e3e296ddb7f2520270a76160f95b2d64b337167294f28c",
-      "size": 6,
+      "sha256": "00251bee1d03f658c2324926785a996dd040dff16bf993b2c520a20edbba72c8",
+      "size": 7,
       "version_added": "1.0.0",
-      "last_modified": "1.0.9"
+      "last_modified": "1.0.10"
     },
     "assets/group-qr.jpg": {
-      "sha256": "f747b5be5355872eaec0802efc19e454cbb73e2eeec4f7ecb8e9b3b995bd8d00",
-      "size": 321686,
+      "sha256": "416e4453853f48397cd10e0b20c95dd8ef9edd09b427813cabb4fa1043684382",
+      "size": 139315,
       "version_added": "1.0.5",
-      "last_modified": "1.0.9"
+      "last_modified": "1.0.10"
     },
     "references/chart-editing.md": {
       "sha256": "37ccd257ae8f8c655e02703e90cdd9163f1254e21587cbe1c833ed8a2854f999",
@@ -587,10 +587,10 @@
       "last_modified": "1.0.6"
     },
     "updates.json": {
-      "sha256": "8239266ae0f0ecb3155085f1d6df25cdb888201cafdbaf5fa54ac54392a29c54",
-      "size": 13125,
+      "sha256": "a0623846c441baf7ccbaec7f15d9eb910eb7971bd86a1972fba372c1f99f314f",
+      "size": 13505,
       "version_added": "1.0.0",
-      "last_modified": "1.0.9"
+      "last_modified": "1.0.10"
     }
   }
 }

@@ -2,6 +2,15 @@
 
 按版本倒序列出可读变更。机器读取请用 [`updates.json`](./updates.json)；只读哪些文件变动请用 [`manifest.json`](./manifest.json) 的 `last_modified` 字段。
 
+## 1.0.10 — 2026-06-01
+
+**更新微信交流群二维码。**
+
+- `assets/group-qr.jpg` 替换为新的「PPT Skill 交流群-3 群」二维码（6 月 8 日前有效）。
+- README 引用路径不变。
+
+纯资源更新。升级：`python3 scripts/apply_update.py`。
+
 ## 1.0.9 — 2026-05-30
 
 **更新微信交流群二维码。**
