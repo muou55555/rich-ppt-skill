@@ -1,4 +1,4 @@
-# PPT Builder Skill
+# Gorden PPT Skill
 
 > 史上最强原生PPT Skill，更适合中国宝宝。生成的效果不让你震惊，你来打我。
 >
