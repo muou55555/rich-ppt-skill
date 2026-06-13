@@ -1,219 +1,273 @@
 ---
-name: gorden-ppt-skill
+name: rich-ppt-skill
 description: >-
-  用 19 套内置中文 PPT 模板（或用户自带的 .pptx 模板）生成与编辑 PowerPoint 演示文稿：只替换文字、不破坏原排版/配色/字号，内置按文本框尺寸的出框检测与同级标题字号一致校验；也支持完全原创的简洁版式。当用户要"做 / 生成 / 制作 / 编辑一份 PPT / 演示文稿 / 幻灯片 / .pptx"，或需要工作汇报、年终与季度总结、述职竞聘、项目复盘、开题答辩、商务提案、教学课件、数据可视化等成品 PPTX 时使用。Use when the user wants to create or edit a PowerPoint / PPT / slides / .pptx deck, pick from built-in templates, or apply their own template without breaking the layout.
+  基于 GordenPPTSkill 扩展的增强版 PPT 生成技能。在保留原版模板替换能力的基础上，新增「富样式原创模式」：
+  通过 python-pptx 代码生成带图标（Phosphor Icons 扁平填充风格）、圆角卡片、箭头流程图、高亮表格、
+  标注框等精美组件的可编辑 .pptx 文件。支持两种主模式：
+  ① 通用PPT（任意主题、商务/技术/学术）；
+  ② 技术汇报（架构图、流程、代码注释、对比表格）。
+  触发词：做PPT / 生成幻灯片 / 技术汇报 / 架构汇报 / ppt / slides / 演示文稿
 ---
 
-# gorden-ppt-skill
+# rich-ppt-skill
 
-> **版本** 见同目录 [`VERSION`](./VERSION)。
+> **版本** `1.0.0` | 基于 GordenPPTSkill v1.x 扩展，新增 Rich Mode（富样式原创生成）
 
 ---
 
-## 🚨 启用本 Skill 后做的第一件事：跑一次自动更新
-
-任何 AI 在本会话**第一次用到这个 Skill 时**，**必须**先把下面这条命令作为它的第一个 tool call：
+## 🚀 启动时第一步：安装依赖 & 克隆基础模板库
 
 ```bash
-python3 scripts/apply_update.py
+# 1. 安装 Python 依赖
+pip install python-pptx cairosvg --break-system-packages -q
+
+# 2. 安装 Phosphor Icons（扁平图标，MIT 开源，与 iconfont 面性风格一致）
+npm install --prefix /tmp/phosphor @phosphor-icons/core 2>/dev/null || true
+
+# 3. 克隆 GordenPPTSkill 模板库（获取 19 套内置模板）
+git clone --depth 1 https://github.com/GordenSun/GordenPPTSkill.git /tmp/GordenPPTSkill 2>/dev/null || true
+
+# 4. 克隆本 Skill 到可写目录
+git clone --depth 1 https://github.com/YOUR_GITHUB_USERNAME/rich-ppt-skill.git /tmp/rich-ppt-skill 2>/dev/null || true
 ```
 
-这条命令会自动：
-1. 从远端 `update_source`（git+ 仓库）拉取最新 `updates.json`
-2. 比对本地 `VERSION` 与远端 `latest_version`
-3. 如果有新版本 → 只下载真正变动的文件（增量更新，无 LFS 流量浪费）
-4. 如果已是最新 → 几秒内退出，输出 `OK   Nothing to do`
-
-⚠️ 本 Skill **不会自动 push 更新**，必须由 AI 主动 pull。如果跳过这一步，可能在用过期版本，行为、规则、模板都可能与文档不符。
-
-✅ 同一会话内只需做一次，后续 tool call 不必重复检查。
+> ✅ 同一会话内只需执行一次。
 
 ---
-
-> **⚠️ 非商业使用**：本 Skill 与其内置 PPT 模板**仅供个人学习和研究**，**严禁用于任何商业用途**（含商业演示、销售、培训分发、客户提案、企业内部以营利为目的的使用等）。模板素材来自第三方设计师作品，二次商用需要获取原作者授权。
 
 ## 何时使用本 Skill
 
-当用户的需求满足下列任何一项就调用本 Skill：
+- 用户需要生成/制作/创建 PPT、演示文稿、幻灯片
+- 用户有 Markdown 文档、技术文章、架构说明，希望转成 PPT
+- 用户想要"精美""有图标""专业感"的 PPT
+- 技术汇报场景：架构图解、流程说明、对比分析
 
-- 需要"做一份 PPT / 演示文稿 / 幻灯片"，无论是工作汇报、年终总结、季度复盘、项目提案、述职竞聘、教学课件、开题答辩、读书报告……
-- 用户给了文字大纲或一段描述，希望"做成 PPT"
-- 用户拿来一份 .pptx 文件，希望"按这个模板做一份新的"
-- 用户希望"调整 / 编辑 PPT 的某些文字"，且要求"不破坏排版"
-- 用户希望对比多个 PPT 模板，选一个合适的
+---
 
-## 更新机制说明
+## 三种模式选择
 
-完整的更新工具有两个脚本：
+### 判断流程
 
-| 脚本 | 干嘛 | 何时用 |
+```
+用户需求
+  ├─ 提供了 .pptx 模板 ──────────────────→ 模式 B（模板替换，沿用 GordenPPTSkill 流程）
+  ├─ 要求"极简/干净/不要花哨" ───────────→ 模式 A（GordenPPTSkill 内置模板）
+  └─ 其他（有内容、要精美、技术汇报等）──→ 模式 C（Rich Mode，本 Skill 核心）
+```
+
+### 模式 A：GordenPPTSkill 内置模板（文字替换）
+
+沿用 `/tmp/GordenPPTSkill/SKILL.md` 的完整流程，不赘述。
+
+### 模式 B：用户自带模板（文字替换）
+
+沿用 GordenPPTSkill 模式 B 流程。
+
+### 模式 C：Rich Mode（富样式原创生成）★ 本 Skill 核心
+
+**适合：** 技术文档 → PPT、内容信息量大、需要图标卡片/流程图等可视化组件
+
+---
+
+## 模式 C 完整工作流
+
+### Step 1：解析内容，规划幻灯片结构
+
+读取用户提供的文档/大纲，按以下结构规划每页：
+
+```
+封面页（D-cover）
+目录页（D-toc）
+章节内容页（D-section-N）× N
+  ├─ 概念/哲学 → 圆角卡片布局（2×2 或 3×2）
+  ├─ 流程/步骤 → 箭头流程图（chevron_flow）
+  ├─ 对比/清单 → 表格（htable）
+  ├─ 时序/架构 → 时序行布局
+  └─ 要点说明 → 标注框（callout_box）
+结尾/参考页（D-end）
+```
+
+### Step 2：生成 build script
+
+调用 `/tmp/rich-ppt-skill/scripts/build_pptx.py` 的核心函数库，
+按规划的结构生成 Python 脚本，例如：
+
+```python
+from scripts.components import *
+prs = new_presentation()
+D_cover(prs, title="Claude Code 实现原理", subtitle="架构·机制·复刻路线")
+D_toc(prs, chapters=[...])
+D_section(prs, title="设计哲学", layout="cards_2x2", items=[
+    CardItem(icon="lightbulb", color=NAVY, title="单一主循环", body="..."),
+    CardItem(icon="agent",     color=SKY,  title="模型即调度器", body="..."),
+    ...
+])
+save_pptx(prs, "/tmp/output.pptx")
+```
+
+### Step 3：嵌入图标
+
+使用 `/tmp/rich-ppt-skill/scripts/icons.py` 的 `get_icon(name, color, size)` 函数。
+图标来源：**Phosphor Icons fill**（MIT 开源，扁平实色，视觉等同 iconfont 面性图标）。
+
+可用图标清单见 `references/icon-reference.md`。
+
+### Step 4：运行生成脚本
+
+```bash
+python3 /tmp/rich-ppt-skill/scripts/build_pptx.py \
+    --input your_script.py \
+    --output /path/to/output.pptx
+```
+
+或直接在 Claude 会话中通过 Bash 工具运行生成脚本。
+
+### Step 5：交付
+
+将生成的 .pptx 复制到用户工作目录，调用 `present_files` 展示。
+
+---
+
+## 视觉规范（Rich Mode 配色与排版）
+
+### 色板
+
+```python
+NAVY   = RGBColor(0x00, 0x32, 0x9D)  # 主色：深海蓝  #00329D
+SKY    = RGBColor(0x44, 0x72, 0xC4)  # 辅色：天空蓝  #4472C4
+MED    = RGBColor(0x30, 0x55, 0x98)  # 中蓝          #305598
+STEEL  = RGBColor(0x2E, 0x75, 0xB6)  # 钢蓝          #2E75B6
+GREEN  = RGBColor(0x1E, 0x8C, 0x55)  # 绿色          #1E8C55
+GOLD   = RGBColor(0xED, 0xAD, 0x1A)  # 金色          #EDAD1A
+ORANGE = RGBColor(0xE0, 0x6B, 0x1A)  # 橙色          #E06B1A
+RED2   = RGBColor(0xC0, 0x39, 0x2B)  # 警示红        #C0392B
+WHITE  = RGBColor(0xFF, 0xFF, 0xFF)
+CARD   = RGBColor(0xEB, 0xF0, 0xF8)  # 卡片背景浅蓝
+LINE   = RGBColor(0xCC, 0xD8, 0xEE)  # 分隔线
+DARK   = RGBColor(0x1A, 0x1A, 0x2E)  # 正文深色
+GRAY   = RGBColor(0x66, 0x72, 0x82)  # 副标题灰
+```
+
+### 字体规范
+
+| 元素 | 字号 | 粗细 | 颜色 |
+|---|---|---|---|
+| 封面主标题 | 32pt | Regular | WHITE/NAVY |
+| 页面标题 | 28pt | Regular | NAVY |
+| 卡片标题 | 13-14pt | Bold | accent色 |
+| 正文 | 10-11pt | Regular | DARK |
+| 副标题/说明 | 9-11pt | Regular | GRAY |
+| 标签/徽章 | 9-10pt | Bold | WHITE |
+
+### 幻灯片尺寸（宽屏 16:9）
+
+```python
+W = 12192000  # EMU，宽
+H = 6858000   # EMU，高
+```
+
+---
+
+## 组件参考（Rich Mode）
+
+### 标题块 title_block(slide, title, subtitle='')
+
+白底左侧竖条（NAVY）+ 标题文字（NAVY 28pt）+ 水平分隔线 + 灰色副标题。
+与 GordenPPTSkill 模板视觉语言对齐。
+
+### 圆角卡片 rcard(slide, x, y, w, h, title, body_lines, accent, icon)
+
+- 白底圆角矩形 + 顶部 accent 色条 + 0.5pt 边框
+- 可选：左上角图标（Phosphor fill）+ 数字徽章
+- body_lines: 文字列表，自动换行
+
+### 箭头流程 chevron_flow(slide, steps, y, item_h, colors)
+
+- N 个 RIGHT_ARROW 形状横排，等宽，间距 0.5%W
+- 每步：主标题 + 副说明文字
+- colors：可自定义每步颜色（默认循环用 ACCENTS）
+
+### 高亮表格 htable(slide, headers, rows, x, y, w, h, hbg)
+
+- 表头 NAVY 底白字，奇偶行 CARD/WHITE 交替
+- 无边框，靠行色区分
+
+### 标注框 callout_box(slide, x, y, w, h, text, border_color, icon)
+
+- 左侧 border_color 竖条 + CARD 背景 + 可选图标
+- 适合"注意事项/关键结论/引言"
+
+### 分节标签 section_tag(slide, x, y, text, bg, icon)
+
+- 圆角胶囊形标签，左侧可带图标，用于页面左上角标注章节
+
+### 数字徽章 num_badge(slide, x, y, n, bg, size)
+
+- 圆形 + 白色数字，用于步骤编号
+
+---
+
+## 技术汇报模式特殊规范
+
+当输入为技术文档（架构说明、系统设计、代码分析等）时：
+
+1. **封面** 用深色（NAVY 背景），右侧信息卡片显示"章节数/机制数/版本"
+2. **目录** 每章节配对应语义图标
+3. **设计原则页** 用 2×2 圆角卡片，每卡带图标
+4. **流程/循环页** 用 chevron_flow 横排流程图
+5. **工具/模块对比** 用 htable，表头 NAVY
+6. **安全/风险页** 左侧红色标注框
+7. **代码示例** 深色背景（DARK）文本框，代码用 SKY 色
+
+---
+
+## 图标使用规范
+
+```python
+from scripts.icons import get_icon
+
+# 用法：get_icon(name, color_hex, size_px)
+# 返回 PNG 文件路径，可直接用于 slide.shapes.add_picture()
+icon_path = get_icon("lightbulb", "#00329D", 64)
+
+# 在 EMU 坐标中添加图标
+slide.shapes.add_picture(icon_path, Emu(x), Emu(y), Emu(size_emu), Emu(size_emu))
+```
+
+图标名称与语义对应见 `references/icon-reference.md`。
+
+---
+
+## 与 GordenPPTSkill 的混合使用
+
+可以将 GordenPPTSkill 的模板页（template slides）与 Rich Mode 的原创页混合：
+
+```python
+# 从 GordenPPTSkill 模板提取若干页作为封面/结尾
+src_prs = Presentation('/tmp/GordenPPTSkill/templates/SLUG/template.pptx')
+tmpl_xml = [copy.deepcopy(src_prs.slides[i]._element) for i in [0, 1, -1]]
+
+# 生成 Rich Mode 内容页
+prs = new_presentation()
+for mk in content_makers:
+    mk(prs)
+
+# 追加模板页
+for xml_el in tmpl_xml:
+    new_sl = prs.slides.add_slide(prs.slide_layouts[6])
+    # ... 复制 XML
+```
+
+详见 `references/hybrid-mode.md`。
+
+---
+
+## 常见错误处理
+
+| 错误 | 原因 | 解决 |
 |---|---|---|
-| `scripts/apply_update.py` | **检查 + 应用**（一步到位） | **每次启用 Skill 第一件事**（见顶部红框） |
-| `scripts/check_update.py` | 仅检查、不应用，列出会变的文件 | 当你只想预览改了什么、不想立即更新时 |
-
-如果只想先看变化再决定要不要升级：
-
-```bash
-python3 scripts/check_update.py     # 列出 added / modified / removed
-```
-
-`updates.json` 的 `update_source` 已配置为 `git+https://github.com/GordenSun/GordenPPTSkill.git#main`，开箱即用，无需修改。
-
-## 三种模式
-
-收到用户需求后，先判断走哪种模式：
-
-### 模式 A：从内置模板里挑
-
-**默认走这条路。** 19 套内置模板覆盖了绝大多数中文场景。
-
-1. **读 [`templates/INDEX.md`](./templates/INDEX.md)** ——一份精简清单，列出每套模板的风格、主色、适用场景、页数。
-2. **匹配用户输入** —— 把用户描述（场景、风格关键词、所需页面类型、颜色偏好）和每个模板的 intro.md 对比。
-3. **选模板的决策规则**：
-   - **用户已明确指定模板** → 直接用。
-   - **你高度确信只有 1 个模板最合适**（场景 + 风格 + 主色都强匹配，且明显优于其它）→ 可直接用，但开工前一句话告诉用户你选了哪个、为什么，给用户一个否决的机会。
-   - **其余所有情况（用户没指定，或你不能完全把握哪个最合适）→ 必须让用户来选**：
-     - 用 AskQuestion 提供 **正好 3 个**候选模板，每个附上一句话理由（风格 / 适用场景 / 页数），并**把对应的 `templates/<slug>/preview.png` 一并展示**给用户看图决策。
-     - 选项里**始终额外带一个「都不满意，换一批」**。用户选它时，再按匹配度给出**另外 3 个**没出现过的候选（同样附预览图）。可反复换，直到用户选定或候选用尽。
-     - 候选都用尽仍不满意 → 询问用户更具体的偏好（风格 / 颜色 / 场景），或转模式 C 原创。
-   - ⚠️ 不要在没让用户看预览图的情况下，仅凭模糊匹配就自作主张定一个模板。
-4. **拿到目标模板后**：
-   - 读 `templates/<slug>/intro.md`（高度浓缩，告诉你这个模板的特性）
-   - 读 `templates/<slug>/detail.json`（结构化数据，告诉你每页 / 每个文本位的细节）
-   - 按 [模式 A 工作流](./references/workflow.md#mode-a) 选页、写 `edits.json`、跑 `build_pptx.py`
-
-### 模式 B：用户自己带 PPT 模板
-
-当用户提供了 .pptx 文件且明确希望以它作模板时：
-
-1. 把用户的 pptx 当作"未知模板"
-2. 用 `scripts/render_slides.py` 把每页渲染成 PNG，再用 `python-pptx` 现场探查每页的 shape / paragraph / run 结构（无需额外脚本）
-3. 自己看每页（PNG + shape 输出）：
-   - 推断每页是什么角色（封面 / 目录 / 章节扉页 / 内容页 / 结束 / 模板宣传）
-   - 推断每页适合放什么内容
-   - 跳过模板宣传 / "稻壳儿" / 感谢下载 之类
-4. 按 [模式 B 工作流](./references/custom-template-workflow.md) 用 explicit `address` 写 `edits.json` 选页 + 文字替换
-5. **不要修改用户模板原文件**；所有改动写到新的 output.pptx
-
-### 模式 C：完全原创（不基于任何模板）
-
-当用户明确要求"原创设计 / 不用模板 / 简单干净的样式"时：
-
-1. **创建尽量简洁的版式** —— 大量留白、对齐严格、装饰极少
-2. 单页元素 ≤ 4 个，避免复杂图形 / 图标群组
-3. 字体：英文 Arial / Helvetica；中文 微软雅黑 / 思源黑体；标题加粗即可
-4. 主色 1 个 + 灰阶 + 白底；不要拼凑多种风格
-5. 用 `python-pptx` 直接代码生成，参考 [`references/original-design-guide.md`](./references/original-design-guide.md)
-
-## 编辑铁律（所有模式通用）
-
-1. **不改排版** —— 只改文字。形状的位置、大小、颜色、字体、字号、行距，都不动。
-2. **所有占位文字必须替换** —— 模板里的 "Question 1" / "Vivamus..." / "Key Words Here" / "项目名称" 等占位文本都必须用真实内容替换。一份完成的 PPT 里不应出现任何示例占位词。
-3. **`max_chars` 是软性参考，不是硬性上限；严禁用省略号截断** —— detail.json 每个 slot 的 `max_chars` / `chars_per_line` / `max_lines` 是按文本框尺寸估算的容量，**仅供参考**，帮助你把握"这格大概能放多少字"。
-   - 优先写**自然、完整、精炼**的文字。略微超出通常没关系（容量已留 20% 余量，PPT 文本框本身也有弹性）。
-   - **绝对禁止为了凑数而砍掉后半句、在结尾加 `...` / `…` / `等等` 来硬凑长度** —— 被省略号截断的半句话，比轻微超框难看得多，是最差的结果。
-   - 真的太长时，按优先级处理：① 用更精炼的措辞**重写**（真正的概括，不是切断）；② 减少要点条数 / 换一个空间更大的版式或页面；③ 实在不行，**宁可让它轻微超出一点，也不要出现省略号**。
-   - `build_pptx.py` 的出框检测**只是提示、不阻断**保存。**日常不要加 `--strict`**（它会因超框拒绝保存，从而诱导截断）。`capacity_unknown:true` 的槽测不准，凭目测把握。
-4. **数字 / 序号默认不动** —— `editable: false` 的 slot 是装饰性 "01/02/1/2/%" 之类，除非用户明确要求改顺序，否则保持。
-5. **图形 / 图表通常无法同步** —— 装饰性的进度条 / 圆环 / 旗帜路径 / 流程箭头是固定形状；改了百分比文字不会改弧长。每个模板 detail.json 里如有这类页面会在 `cautions` 字段列出。
-6. **真实数据图表才能改数据** —— 如果某页有 PPT 原生 chart（`shape.has_chart=True`），可以用 `build_pptx.py --chart-data` 同步更新；详见 [`references/chart-editing.md`](./references/chart-editing.md)。
-7. **章节名前后呼应** —— 改了目录章节名，对应的分章扉页 + 内容页面包屑文字都要同步改。
-8. **封面 / 致谢页按模板能力来，不要硬造** ——
-   - 读 `detail.json` 的 `page_roles`，如果 `cover` 数组为空，**直接从第一张内容页开始**，不要拿一张内容页当封面用，更不要从其他模板临时凑一张封面页。
-   - 如果 `ending` 数组为空，**直接以最后一张内容页收尾**，不要硬造"感谢聆听"。
-   - 同理，`agenda` 空 → 不强加目录；`section_divider` 空 → 不强加分章扉页。
-   - 也就是说：**模板有什么角色就用什么角色**，少一个角色就少一页，不要破坏视觉一致性去拼凑。这条规则在 v1.0.3 起对所有模板生效。
-9. **同级标题字号必须一致，不要逐处改字号** ——
-   - detail.json 顶部有 `type_scale`（字号层级表，level 1 = 最大），每个 slot 标了 `level`。**同一 level 的文字保持模板原字号，不要改字号。**
-   - 某处文字偏长时，用**更精炼的措辞重写**来控制长度（见第 3 条），**不要把这一处字号改小**（会破坏同级一致），**也不要截断加省略号**。
-   - 选多页拼一份 PPT 时，让各页同 level 的标题用词长度相近，整体才齐整。
-
-## 标准工作流（模式 A）
-
-```bash
-# 1. 从 templates/INDEX.md 选定一个模板，例如 minimal-business-summary
-TEMPLATE=templates/minimal-business-summary
-
-# 2. 读两个文件
-#    - $TEMPLATE/intro.md     -> 模板风格 / 适用场景 / 结构概述
-#    - $TEMPLATE/detail.json  -> 每页 / 每个文本位的详细描述
-
-# 3. 自己决定要用哪些页（用 detail.json 的 page.role 和 use_for）
-#    生成 edits.json：
-#    {
-#      "template_slug": "minimal-business-summary",
-#      "selected_slides": [1, 2, 3, 5, 7, 9, 10, 12, 13, 14, 16],
-#      "edits": [
-#        {"slide": 1, "slot_id": "cover_title_cn", "new_text": "2026 年度复盘"},
-#        ...
-#      ]
-#    }
-
-# 4. 跑构建（不要加 --strict：出框检测只作提示，不应阻断；超框宁可轻微超出也别截断加省略号）
-python3 scripts/build_pptx.py \
-    $TEMPLATE/template.pptx \
-    edits.json \
-    out/final.pptx \
-    --detail $TEMPLATE/detail.json
-
-# 5. （可选）渲染最终 pptx 给用户预览 / 自检（每页一张 PNG）
-python3 scripts/render_slides.py out/final.pptx out/renders --dpi 144
-```
-
-## 目录结构
-
-```
-GordenPPTSkill/
-├── SKILL.md               ← 本文件
-├── VERSION                ← 当前版本号
-├── CHANGELOG.md           ← 人类可读变更日志
-├── updates.json           ← 机器可读版本增量索引
-├── manifest.json          ← 所有文件的 sha256 与版本归属
-├── README.md              ← 仓库概览（用户阅读）
-├── scripts/
-│   ├── build_pptx.py          # 按 edits.json 选页 + 换字 → 输出 pptx（含出框检测）
-│   ├── render_slides.py       # pptx → PDF → 每页 PNG（预览/自检）
-│   ├── compute_capacity.py    # 由 template.pptx 计算每个 slot 的容量字段（数据准备）
-│   ├── check_update.py        # 检查远端是否有更新
-│   ├── apply_update.py        # 增量更新本地文件
-│   └── build_manifest.py      # 重建 manifest.json
-├── references/
-│   ├── workflow.md
-│   ├── pptx-edit-schema.md
-│   ├── custom-template-workflow.md
-│   ├── chart-editing.md
-│   └── original-design-guide.md
-└── templates/
-    ├── INDEX.md
-    └── <slug>/
-        ├── template.pptx
-        ├── intro.md       # 高度浓缩简介
-        ├── detail.json    # 详细页面 / slot 数据（含容量字段 + type_scale）
-        └── preview.png    # 4 页 2×2 拼接预览图
-```
-
-## 关键脚本一句话说明
-
-| 脚本 | 干嘛用 |
-|---|---|
-| `build_pptx.py` | 按 `edits.json`（选页 + 文字替换）从模板生成最终 pptx；带出框检测，`--strict` 时出框拒绝保存 |
-| `render_slides.py` | 把任意 pptx 渲染成每页一张 PNG（用 LibreOffice + pdftoppm），用于预览 / 自检 |
-| `compute_capacity.py` | 由 template.pptx 算出每个 slot 的 `chars_per_line/max_lines/max_chars` 等容量字段（自带模板已算好，仅在加新模板时需要） |
-| `check_update.py` | 对比本地 VERSION 和远端 updates.json，告诉你要不要更新 |
-| `apply_update.py` | 按 updates.json 的 delta 列表只下载变动文件 |
-| `build_manifest.py` | 重新计算 manifest.json |
-
-## 字体说明
-
-模板 XML 里大量使用 `微软雅黑`。如果运行环境没有该字体，配合 `~/.config/fontconfig/fonts.conf` 把它别名到本地已安装的字体（推荐顺序：WenQuanYi Micro Hei → DengXian → Noto Sans SC → PingFang SC）。预览图正是用这条 fallback 链渲染的。
-
-最终交给用户的 .pptx 在 PowerPoint / WPS / Keynote 里打开时会自动用宿主机的字体渲染，因此不需要担心字体丢失问题。
-
-## 一些常见误区
-
-- **不要**只改文字不改章节名一致性 —— 改 agenda 必须同步改分章扉页
-- **不要**在装饰图上加文字以为是真图表
-- **不要**把 lorem ipsum 留在最终 PPT 里
-- **不要**为了塞下文字而忽略 `max_chars`
-- **不要**修改用户原始模板文件 —— 所有产出都到新文件
-- **不要**用本 Skill 做商业项目 —— 见顶部声明
+| `RGBColor() missing args` | `RGBColor(0xFFFFFF)` 单参 | 改为 `RGBColor(0xFF, 0xFF, 0xFF)` |
+| 孤儿 slide 关系 | 操作了 `_sldIdLst` | 调用 `purge_orphans(prs)` |
+| cairosvg 找不到 | 非标准安装路径 | `sys.path.insert(0, '/path/to/site-packages')` |
+| 图标变形 | 手写 SVG path 不准 | 使用 Phosphor Icons 官方 SVG 文件 |
+| 文字超出边界 | 字号或内容太长 | 减小字号或拆分到多行 |
