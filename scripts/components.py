@@ -359,6 +359,15 @@ def copy_template_slide(prs: Presentation, src_slide) -> object:
     # 2. 深复制整个 cSld（含背景 p:bg 和形状 p:spTree）
     src_cSld = _copy.deepcopy(src_slide._element.find(qn('p:cSld')))
 
+    # 2b. 移除模板自带的 custDataLst（p:tags 引用）
+    # GordenPPTSkill 模板的 shape 含 <p:custDataLst><p:tags r:id="rIdX"/>
+    # 这些 tags rel 没有被复制 → rId 悬空 → "PowerPoint 发现问题" 错误
+    _P_NS = 'http://schemas.openxmlformats.org/presentationml/2006/main'
+    for cust in list(src_cSld.iter(f'{{{_P_NS}}}custDataLst')):
+        parent = cust.getparent()
+        if parent is not None:
+            parent.remove(cust)
+
     # 3. 将 XML 中旧 rId 替换为新 rId
     if rId_map:
         xml_str = _etree.tostring(src_cSld, encoding='unicode')
