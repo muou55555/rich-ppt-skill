@@ -107,3 +107,37 @@ templates/       # 17 个模板（每个 4 文件）
 - **禁止任何二次分发 / 商业使用**
 - 用到的开源工具：[LibreOffice](https://www.libreoffice.org/)、[python-pptx](https://python-pptx.readthedocs.io/)、[Poppler](https://poppler.freedesktop.org/)、[WenQuanYi Micro Hei](http://wenq.org/)
 - 感谢 [LinuxDO](https://linux.do) 社区的支持
+
+---
+
+## Design Spec — GenSpark HTML Deck 设计规范（2024年分析）
+
+本仓库 `design-spec/` 目录包含从 GenSpark AI PPT 生成产品中逆向分析总结的完整设计方法论。
+
+### 文件说明
+
+| 文件 | 内容 |
+|------|------|
+| [`design-spec/genspark-design-language.md`](design-spec/genspark-design-language.md) | 核心设计语言规范：配色、字体、布局、12个组件的 python-pptx 实现 |
+| [`design-spec/slide-type-recipes.md`](design-spec/slide-type-recipes.md) | 9种页面类型配方：封面/目录/4卡片/6卡片/时间线/流程/统计/矩阵/章节页 |
+| [`design-spec/pptx-component-library.py`](design-spec/pptx-component-library.py) | 可直接使用的 python-pptx 组件库（颜色常量、形状函数、布局助手） |
+| [`design-spec/html-to-pptx-methodology.md`](design-spec/html-to-pptx-methodology.md) | HTML→PPTX 完整转换方法论（FontAwesome图标、3种转换模式、Playwright截图） |
+| [`design-spec/dynamic-layout-generation.md`](design-spec/dynamic-layout-generation.md) | 动态布局生成：AI驱动、内容分类器、多布局Prompt模板、品质验证 |
+
+### 核心洞察
+
+**GenSpark 的技术路线**（HTML先行，非模板）：
+1. AI 生成 HTML（含 Tailwind CSS + FontAwesome 6 + Noto Sans SC）
+2. Playwright 截图 + DOM 解析文本坐标
+3. 截图作背景 + 透明 TextBox 叠加 → 可编辑 PPTX
+
+**核心 CDN 依赖**：
+```html
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap" rel="stylesheet">
+```
+
+**设计色板**（16 decks 统一使用）：
+- 背景 `#0f172a` | 卡片 `#1e293b` | 边框 `#334155`
+- 强调 `#38bdf8`（sky-400）| 主文字 `#f1f5f9` | 辅助 `#94a3b8`
