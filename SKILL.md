@@ -44,15 +44,16 @@ git clone --depth 1 https://github.com/YOUR_GITHUB_USERNAME/rich-ppt-skill.git /
 
 ---
 
-## 三种模式选择
+## 四种模式选择
 
 ### 判断流程
 
 ```
 用户需求
-  ├─ 提供了 .pptx 模板 ──────────────────→ 模式 B（模板替换，沿用 GordenPPTSkill 流程）
-  ├─ 要求"极简/干净/不要花哨" ───────────→ 模式 A（GordenPPTSkill 内置模板）
-  └─ 其他（有内容、要精美、技术汇报等）──→ 模式 C（Rich Mode，本 Skill 核心）
+  ├─ 提供了 .pptx 模板 ──────────────────────→ 模式 B（模板替换，沿用 GordenPPTSkill 流程）
+  ├─ 要求"极简/干净/不要花哨" ─────────────────→ 模式 A（GordenPPTSkill 内置模板）
+  ├─ 有现成 HTML slides，需要完全可编辑 PPTX ──→ 模式 D（HTML 解析 + 手工布局重建）
+  └─ 其他（有内容、要精美、技术汇报等）────────→ 模式 C（Rich Mode，本 Skill 核心）
 ```
 
 ### 模式 A：GordenPPTSkill 内置模板（文字替换）
@@ -62,6 +63,38 @@ git clone --depth 1 https://github.com/YOUR_GITHUB_USERNAME/rich-ppt-skill.git /
 ### 模式 B：用户自带模板（文字替换）
 
 沿用 GordenPPTSkill 模式 B 流程。
+
+### 模式 D：HTML 解析 + 手工布局重建（无截图，完全可编辑）
+
+**适合：**
+- 已有 1280×720 position:absolute HTML slides，想转成纯 native PPTX elements
+- 不依赖浏览器/Playwright，避免 macOS Chrome subprocess 超时问题
+- 需要 100% 可编辑（无图片背景）
+
+**核心流程：**
+
+1. **解析 HTML header**（BeautifulSoup）：提取 label / H1 / subtitle / 颜色
+2. **计算 flex 等高布局**：用公式推导每个卡片/行的 y 坐标和高度
+3. **python-pptx 原生重建**：用 `rect()` + `tb()` + `grad_bar()` 组装每个元素
+
+**单位换算（记住这两行）：**
+
+```python
+def E(px):  return Emu(int(round(px * 9525)))   # 1px = 9525 EMU
+def Fp(px): return Pt(round(px * 0.75, 1))      # 1px = 0.75pt
+```
+
+**Flex 等高公式：**
+
+```python
+card_h = (container_h - label_overhead - gap * (n - 1)) / n
+ty_i   = container_top + label_overhead + i * (card_h + gap)
+```
+
+**完整参考实现：** `scripts/build_pptx_v2_example.py`
+**方法论详解：** `design-spec/html-to-pptx-methodology.md` 第八节
+
+---
 
 ### 模式 C：Rich Mode（富样式原创生成）★ 本 Skill 核心
 

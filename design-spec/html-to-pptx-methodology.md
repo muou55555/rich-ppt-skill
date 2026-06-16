@@ -672,3 +672,279 @@ prs.save('output.pptx')
 | 生成速度 | ★★ 需要截图步骤（慢） | ★ 直接生成（快） |
 
 **结论**：对于需要视觉丰富的技术演示，HTML先行 + 混合模式转换是最佳实践。
+
+---
+
+## 八、模式 4：HTML 解析 + 手工布局重建（★ 无截图，完全可编辑）
+
+> **实战场景**：将 1280×720 HTML slides（position:absolute + flexbox 布局）精准还原为
+> 全 native python-pptx elements，不依赖浏览器或截图工具。
+> 适合：HTML 已确定、布局可数学推导的情况。
+
+---
+
+### 核心坐标系换算
+
+```python
+# HTML 画布 1280×720px → PPTX LAYOUT_WIDE 13.333"×7.5" = 12192000×6858000 EMU
+# 1 px = 9525 EMU
+
+from pptx.util import Emu, Pt
+
+def E(px):  return Emu(int(round(px * 9525)))   # px → EMU
+def Fp(px): return Pt(round(px * 0.75, 1))      # px → pt（1px = 0.75pt）
+
+# 使用示例
+shape = slide.shapes.add_shape(1, E(52), E(14), E(600), E(16))
+run.font.size = Fp(9.5)   # 9.5px CSS → 7.125pt
+```
+
+---
+
+### 标准 Header 模式（所有内页复用）
+
+HTML slides 的统一 header 结构（top:0~88px 区域）：
+
+```
+top:0     ├─ 色条（height:4px，渐变）
+top:14    ├─ section label（9.5px bold, letter-spacing:4px）
+top:36    ├─ H1（28px bold Space Grotesk）+ subtitle（11.5px Noto Sans SC）
+top:74    ├─ 分隔线（height:1px，#e2e8f0）
+top:88    └─ 内容区开始
+```
+
+**python-pptx 实现：**
+
+```python
+from lxml import etree
+from pptx.oxml.ns import qn
+
+def grad_bar(slide, c1, c2, lx=0, ty=0, w=1280, h=4):
+    """水平渐变色条（通过操作 XML 实现，python-pptx 原生不支持渐变）"""
+    s = slide.shapes.add_shape(1, E(lx), E(ty), E(w), E(h))
+    s.line.fill.background()
+    sp = s._element.spPr
+    # 移除既有填充
+    for tag in ['a:solidFill','a:gradFill','a:noFill']:
+        el = sp.find(qn(tag))
+        if el is not None: sp.remove(el)
+    # 注入渐变 XML
+    gf  = etree.SubElement(sp, qn('a:gradFill'))
+    gsl = etree.SubElement(gf, qn('a:gsLst'))
+    for pos, col in [('0', c1.lstrip('#')), ('100000', c2.lstrip('#'))]:
+        gs = etree.SubElement(gsl, qn('a:gs')); gs.set('pos', pos)
+        sc = etree.SubElement(gs, qn('a:srgbClr')); sc.set('val', col)
+    lin = etree.SubElement(gf, qn('a:lin'))
+    lin.set('ang', '0'); lin.set('scaled', '0')  # 0° = 从左到右
+
+def std_header(slide, label, h1_text, subtitle, sec_color, c1=None, c2=None):
+    """标准 header：色条 / 标签 / H1+副标题 / 分隔线"""
+    grad_bar(slide, c1 or '#'+sec_color, c2 or '#'+sec_color)
+    tb(slide, label, 52, 14, 700, 16, px=9.5, bold=True,
+       color=sec_color, char_spc=4, wrap=False)
+    h1_w = min(len(h1_text) * 17 + 20, 700)
+    tb(slide, h1_text, 52, 36, h1_w, 38, px=28, bold=True,
+       color='0f172a', face='Space Grotesk', wrap=False)
+    if subtitle:
+        sub_left = 52 + h1_w + 16
+        if sub_left < 950:
+            tb(slide, subtitle, sub_left, 42, 1228 - sub_left, 28,
+               px=11.5, color='64748b', wrap=False)
+    rect(slide, 52, 74, 1176, 1, fill='e2e8f0')   # 分隔线
+```
+
+---
+
+### Flex 布局等分公式
+
+HTML 中 `display:flex; flex-direction:column; flex:1` 的子元素等高分布，
+转 PPTX 时需要手工计算：
+
+```
+card_height = (container_height - label_overhead - total_gaps) / n_items
+
+示例（slide_06 左列，4 个 tech-stack 卡片）：
+  container:   top=88, bottom=696(720-24)   → h = 608px
+  label:       ~16px text + 10px margin     → 26px 已占用
+  gaps:        3 × 8px                      → 24px
+  card_h = (608 - 26 - 24) / 4 = 139.5 ≈ 140px
+
+Python 计算：
+  CONTAINER_TOP    = 88
+  CONTAINER_BOTTOM = 720 - 24          # bottom:24px
+  label_h          = 26                # 标签行高度
+  gap              = 8
+  n                = 4
+
+  avail  = (CONTAINER_BOTTOM - CONTAINER_TOP) - label_h
+  card_h = (avail - gap * (n - 1)) / n  # ≈ 139.5
+
+  for i in range(n):
+      ty = CONTAINER_TOP + label_h + i * (card_h + gap)
+      rect(slide, 52, ty, 440, card_h, ...)
+```
+
+**各 slide 的 flex 参数汇总：**
+
+| Slide | 容器范围 | 列数 | Gap | 卡片高 |
+|-------|---------|------|-----|--------|
+| 06 左列 | top=118, bottom=696, h=608 | 4 | 8px | ≈137px |
+| 06 右列 | top=118, bottom=696, h=608 | 5 | 7px | ≈109px |
+| 09 左列 | top=88, bottom=720, h=632  | 6 | 0   | ≈105px |
+| 13 内容 | top=70, bottom=700, h=630  | 5 | 11px| ≈117px |
+| 14 钩子 | top=118, bottom=720, h=602 | 4 | 4px | ≈148px |
+
+---
+
+### Grid 布局（slide_08 / slide_10）
+
+```python
+# slide_08 底部 4 列（height:310, bottom:0）
+BOTTOM_TOP = 720 - 310   # = 410
+col_w      = 1280 // 4   # = 320
+
+for i, col_data in enumerate(cols):
+    lx = i * col_w
+    rect(slide, lx, BOTTOM_TOP, col_w, 310, ...)
+
+# slide_10 9行表格（5列 grid: 36 56 1fr 220 68）
+# 总可用宽 = 1280 - 200(左面板) - 24(padding-left) - 28(padding-right) = 1028px
+# 1fr = 1028 - 36 - 56 - 220 - 68 = 648px
+COL_WIDTHS = [36, 56, 648, 220, 68]
+COL_X      = [200+24]
+for w in COL_WIDTHS[:-1]:
+    COL_X.append(COL_X[-1] + w)
+
+row_h = (720 - 122 - 12) // 9   # 可用高度 / 9 行 ≈ 64px
+for i, row in enumerate(rows):
+    ty = 122 + i * row_h
+    # 逐列渲染 ...
+```
+
+---
+
+### 完整 Primitive 库（可复用）
+
+```python
+from pptx import Presentation
+from pptx.util import Emu, Pt
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
+from pptx.oxml.ns import qn
+from lxml import etree
+
+def E(px):  return Emu(int(round(px * 9525)))
+def Fp(px): return Pt(round(px * 0.75, 1))
+def rgb(h):
+    h = h.lstrip('#')
+    return RGBColor(int(h[:2],16), int(h[2:4],16), int(h[4:],16))
+
+def rect(slide, lx, ty, w, h, fill='ffffff', border=None, bw=0.5):
+    s = slide.shapes.add_shape(1, E(lx), E(ty), E(w), E(h))
+    s.fill.solid(); s.fill.fore_color.rgb = rgb(fill)
+    if border:
+        s.line.color.rgb = rgb(border); s.line.width = Pt(bw)
+    else:
+        s.line.fill.background()
+    return s
+
+def tb(slide, text, lx, ty, w, h,
+       px=13, bold=False, color='0f172a', face='Noto Sans SC',
+       italic=False, wrap=True, align='left', char_spc=0):
+    """零内边距透明文字框"""
+    box = slide.shapes.add_textbox(E(lx), E(ty), E(w), E(h))
+    box.fill.background(); box.line.fill.background()
+    tf = box.text_frame; tf.word_wrap = wrap
+    p  = tf.paragraphs[0]
+    p.alignment = {'left':PP_ALIGN.LEFT,'center':PP_ALIGN.CENTER,
+                   'right':PP_ALIGN.RIGHT}.get(align, PP_ALIGN.LEFT)
+    run = p.add_run()
+    run.text = text
+    run.font.size = Fp(px); run.font.bold = bold
+    run.font.italic = italic
+    run.font.color.rgb = rgb(str(color).lstrip('#'))
+    run.font.name = face
+    if char_spc:
+        run._r.get_or_add_rPr().set('spc', str(int(char_spc * 100)))
+    # 清除内边距
+    bp = tf._txBody.find(qn('a:bodyPr'))
+    if bp is not None:
+        for attr in ('lIns','rIns','tIns','bIns'): bp.set(attr, '0')
+    return box
+```
+
+---
+
+### BeautifulSoup 解析 Header（动态读取 slide 元数据）
+
+```python
+from bs4 import BeautifulSoup
+import re
+
+def parse_slide_header(html_path):
+    """从 HTML 文件中提取标准 header 信息"""
+    soup = BeautifulSoup(open(html_path, encoding='utf-8'), 'lxml')
+
+    # Section label（top:14px, left:52px）
+    label_div = next(
+        (d for d in soup.find_all('div', style=True)
+         if 'top:14px' in d['style'].replace(' ','') and 'left:52px' in d['style'].replace(' ','')),
+        None
+    )
+    if not label_div:
+        return None
+
+    label = label_div.get_text(strip=True)
+    sec_color = re.search(r'color:#([0-9a-fA-F]{6})',
+                           label_div.get('style','')).group(1) if re.search(...) else '6366f1'
+
+    # H1 + subtitle（top:36px, left:52px）
+    h1_tag  = soup.find('h1')
+    h1_text = h1_tag.get_text(strip=True) if h1_tag else ''
+
+    title_row = next(
+        (d for d in soup.find_all('div', style=True)
+         if 'top:36px' in d['style'].replace(' ','') and 'left:52px' in d['style'].replace(' ','')),
+        None
+    )
+    subtitle = ''
+    if title_row:
+        span = title_row.find('span')
+        if span: subtitle = span.get_text(strip=True)
+
+    # 色条渐变颜色
+    bar_colors = re.findall(r'#([0-9a-fA-F]{6})',
+        (soup.find('div', style=re.compile(r'height:4px')) or {}).get('style',''))
+
+    return {
+        'label':    label,
+        'h1':       h1_text,
+        'subtitle': subtitle,
+        'color':    sec_color,
+        'c1':       '#' + bar_colors[0] if bar_colors else '#' + sec_color,
+        'c2':       '#' + bar_colors[-1] if bar_colors else '#' + sec_color,
+    }
+```
+
+---
+
+### 模式 4 vs 其他模式对比
+
+| 维度 | 模式1 截图 | 模式2 混合 | 模式3 DOM解析 | **模式4 手工布局** |
+|------|-----------|-----------|--------------|-------------------|
+| 浏览器依赖 | ✅ 必须 | ✅ 必须 | ✅ 必须 | ❌ 无需 |
+| 网络依赖（CDN） | ✅ 需要 | ✅ 需要 | ✅ 需要 | ❌ 无需 |
+| 可编辑性 | ❌ 图片 | ⚠️ 仅标题 | ✅ 全可编辑 | ✅ 全可编辑 |
+| 视觉还原度 | ★★★★★ | ★★★★ | ★★★ | ★★★★ |
+| Flex/Grid 支持 | ✅ 天然支持 | ✅ 天然支持 | ⚠️ 需自己实现 | ⚠️ 手工计算坐标 |
+| macOS Chrome 超时问题 | ⚠️ 存在 | ⚠️ 存在 | ⚠️ 存在 | ❌ 无此问题 |
+| 适合场景 | 快速存档 | 演示+编辑标题 | 结构清晰的静态布局 | **slides 结构固定，布局可推导** |
+
+**何时选择模式 4：**
+- HTML slides 已经固定，不会频繁更新
+- 布局是 position:absolute 或 flex:1 等分（可用公式计算）
+- 需要在 macOS 上脱离浏览器运行（无 Chrome subprocess / Playwright）
+- 需要 100% 可编辑的 native PPTX，不接受任何截图背景
+
+**实际案例：** `Claude-Code实现原理-可编辑版v2.pptx`（12 slides，
+从 1280×720 HTML v2 slides 解析 header + 手工还原 flex 布局，无需任何浏览器）。
